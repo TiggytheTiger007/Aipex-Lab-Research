@@ -1,0 +1,76 @@
+Error details:
+BRep_API: command not done
+
+Code attempted:
+import cadquery as cq
+
+# Parameters
+arm_length = 80.0
+arm_width = 20.0
+arm_thickness = 10.0
+bore_diameter_large = 30.0
+bore_diameter_small = 15.0
+bore_length = 60.0
+fillet_radius = 2.0
+mount_hole_diameter = 5.0
+mount_hole_spacing = 30.0
+rib_height = 4.0
+rib_width = 6.0
+rib_spacing = 15.0
+slot_width = 4.0
+slot_length = 20.0
+slot_offset = 10.0
+
+# Base arm extrusion
+base = (
+    cq.Workplane("XY")
+    .rect(arm_length, arm_width)
+    .extrude(arm_thickness)
+)
+
+# Add ribs on top surface for stiffness
+rib_count = int((arm_length - 2 * slot_offset) // rib_spacing)
+for i in range(rib_count):
+    x_pos = -arm_length/2 + slot_offset + i * rib_spacing + rib_spacing/2
+    rib = (
+        cq.Workplane("XY")
+        .center(x_pos, 0)
+        .rect(rib_width, arm_width)
+        .extrude(rib_height)
+    )
+    base = base.union(rib)
+
+# Create tapered bore (cone) and cut it from the arm
+cone = (
+    cq.Workplane("XY")
+    .center(0, 0)
+    .circle(bore_diameter_large/2)
+    .workplane(offset=bore_length)
+    .circle(bore_diameter_small/2)
+    .loft()
+)
+base = base.cut(cone)
+
+# Add a rectangular slot near the large end for clearance
+slot = (
+    cq.Workplane("XY")
+    .center(-arm_length/2 + slot_offset, 0)
+    .rect(slot_length, slot_width)
+    .extrude(arm_thickness)
+)
+base = base.cut(slot)
+
+# Add mounting holes on the top face, symmetric about centerline
+hole_positions = [(-mount_hole_spacing/2, 0), (mount_hole_spacing/2, 0)]
+for x, y in hole_positions:
+    base = (
+        base.faces(">Z")
+        .workplane()
+        .center(x, y)
+        .hole(mount_hole_diameter)
+    )
+
+# Apply fillet to outer edges for safety
+result = base.edges("|Z").fillet(fillet_radius)
+
+

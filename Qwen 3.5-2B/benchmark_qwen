@@ -1,0 +1,127 @@
+import os
+import sys
+import re
+import traceback
+
+# 1. AUTO-PATCH C++ LIBRARY FIX 
+conda_prefix = os.environ.get("CONDA_PREFIX", "/home/aipexws2/anaconda3/envs/sid")
+modern_lib = os.path.join(conda_prefix, "lib", "libstdc++.so.6")
+
+if os.environ.get("LD_PRELOAD") != modern_lib and os.path.exists(modern_lib):
+    print("🔧 Auto-patching C++ library paths to prevent CadQuery crash...")
+    os.environ["LD_PRELOAD"] = modern_lib
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" 
+
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import cadquery as cq
+
+def run_interactive_agentic_benchmark():
+    model_id = "Qwen/Qwen3.5-2B"
+    print(f"\n--- Loading {model_id} into VRAM... ---")
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        device_map="auto",
+        torch_dtype=torch.bfloat16
+    )
+    print("✅ Model loaded successfully!\n")
+
+    prompt_counter = 1
+
+    while True:
+        print("="*60)
+        shape_desc = input(f"📝 Enter prompt #{prompt_counter} (or type 'exit' to quit):\n> ")
+        
+        if shape_desc.strip().lower() in ['exit', 'quit']:
+            print("\n🛑 Exiting benchmark pipeline.")
+            break
+            
+        if not shape_desc.strip():
+            continue
+
+        print("-" * 60)
+        
+        # EXACT ZERO-TO-CAD PAPER SYSTEM CONSTRAINTS
+        system_instruction = """You are an expert mechanical engineering AI. Write a CadQuery Python script for the requested geometry. You must obey the following rules:
+1. You must assign the final 3D solid to a variable explicitly named `result`.
+2. Extract all numerical values into isolated parametric variables at the top of the script.
+3. Do not include any code comments. 
+4. Do not include export statements.
+5. Assume a maximum bounding box dimension of 100 units."""
+        
+        # SANITIZED USER PROMPT (No conversational commands)
+        user_prompt = shape_desc
+        
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        max_retries = 3
+        error_count = 0
+        success = False
+        cad_code = ""
+
+        while error_count <= max_retries and not success:
+            print(f"\nAttempt {error_count + 1}/{max_retries + 1}...")
+            
+            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer(text, return_tensors="pt").to("cuda")
+
+            with torch.no_grad():
+                output_ids = model.generate(
+                    **inputs, 
+                    max_new_tokens=1024, 
+                    do_sample=True,      
+                    temperature=0.6,     
+                    top_p=0.9
+                )
+
+            generated_ids = [out[len(ins):] for ins, out in zip(inputs.input_ids, output_ids)]
+            response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+            match = re.search(r'```python\s*(.*?)\s*```', response, re.DOTALL)
+            cad_code = match.group(1) if match else response
+
+            local_namespace = {}
+            
+            try:
+                exec(cad_code, globals(), local_namespace)
+                
+                # Check if the mandatory 'result' variable exists
+                if 'result' in local_namespace:
+                    file_name = f"prompt_{prompt_counter}_instruct.stl"
+                    cq.exporters.export(local_namespace['result'], file_name)
+                    success = True
+                    print(f"✅ Execution Successful! 3D model exported as: {file_name}")
+                else:
+                    raise ValueError("The script executed, but the 'result' variable was missing.")
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"❌ Execution Failed. Error: {error_msg}")
+                
+                if error_count < max_retries:
+                    print("🔄 Feeding traceback back to Qwen-Instruct...")
+                    messages.append({"role": "assistant", "content": "```python\n" + cad_code + "\n```"})
+                    messages.append({"role": "user", "content": f"Running that code produced the following python execution error:\n{error_msg}\nRewrite the entire script to fix this error. DO NOT use Chain-of-Thought."})
+                
+                error_count += 1
+
+        print("\n" + "#"*50)
+        print(" 📊 MANUAL LOGGING SUMMARY")
+        print("#"*50)
+        print(f"Prompt ID:   {prompt_counter}")
+        print(f"Description: {shape_desc}")
+        print(f"Status:      {'✅ SUCCESS' if success else '❌ FAILED (Max Retries Reached)'}")
+        print(f"Error Count: {error_count}")
+        print("#"*50 + "\n")
+        
+        prompt_counter += 1
+
+if __name__ == "__main__":
+    run_interactive_agentic_benchmark()

@@ -1,0 +1,45 @@
+Error details:
+Chamfer requires that edges be selected
+
+Code attempted:
+import cadquery as cq
+
+# Parameters
+outer_radius = 30.0
+wall_thickness = 5.0
+inner_radius = outer_radius - wall_thickness
+channel_length = 80.0
+chamfer_size = 1.0
+hole_diameter = 4.0
+hole_spacing = 20.0
+hole_count = 3
+hole_offset = 10.0
+
+# Base solid: full cylinder
+base = cq.Workplane('XY').circle(outer_radius).extrude(channel_length)
+
+# Create half-pipe by cutting away negative Y side
+half_cut = (
+    cq.Workplane('XY')
+    .box(2 * outer_radius, channel_length, 2 * outer_radius)
+    .translate((0, -channel_length / 2, 0))
+)
+half_pipe = base.cut(half_cut)
+
+# Hollow out the interior
+hollow = half_pipe.shell(-wall_thickness)
+
+# Chamfer the inner edge of the opening (edges parallel to Z on the inner side)
+chamfered = hollow.edges("|Z and <Y").chamfer(chamfer_size)
+
+# Add a linear array of tapped holes on the outer flat face (positive Y side)
+result = (
+    chamfered
+    .faces('>Y')
+    .workplane()
+    .center(0, hole_offset)
+    .rarray(0, hole_spacing, 1, hole_count)
+    .hole(hole_diameter)
+)
+
+

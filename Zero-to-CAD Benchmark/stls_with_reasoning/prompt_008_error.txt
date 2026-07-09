@@ -1,0 +1,73 @@
+Error details:
+name 'mount_hole_offset' is not defined
+
+Code attempted:
+import cadquery as cq
+
+# Parameters
+trapezoid_height = 30.0
+trapezoid_bottom_width = 60.0
+trapezoid_top_width = 40.0
+plate_thickness = 8.0
+central_hole_diameter = 12.0
+central_hole_depth = 6.0
+mount_hole_diameter = 5.0
+mount_hole_offset = 10.0
+rib_width = 6.0
+rib_height = 12.0
+rib_thickness = 2.0
+rib_spacing = 15.0
+chamfer_size = 1.0
+
+# Base trapezoidal plate
+base = (
+    cq.Workplane("XY")
+    .polyline([
+        (-trapezoid_bottom_width/2, 0),
+        (trapezoid_bottom_width/2, 0),
+        (trapezoid_top_width/2, trapezoid_height),
+        (-trapezoid_top_width/2, trapezoid_height),
+    ])
+    .close()
+    .extrude(plate_thickness)
+)
+
+# Central blind hole (non-through)
+base = (
+    base.faces(">Z")
+    .workplane()
+    .center(0, 0)
+    .circle(central_hole_diameter/2)
+    .cutBlind(central_hole_depth)
+)
+
+# Mounting holes at four corners
+mount_points = [
+    (trapezoid_bottom_width/2 - mount_hole_offset, trapezoid_height - mount_hole_offset),
+    (-trapezoid_bottom_width/2 + mount_hole_offset, trapezoid_height - mount_hole_offset),
+    (-trapezoid_bottom_width/2 + mount_hole_offset, mount_hole_offset),
+    (trapezoid_bottom_width/2 - mount_hole_offset, mount_hole_offset),
+]
+base = (
+    base.faces(">Z")
+    .workplane()
+    .pushPoints(mount_points)
+    .hole(mount_hole_diameter)
+)
+
+# Stiffening ribs on top surface, spaced along Y direction
+rib_count = int((trapezoid_height - 2*mount_hole_offset) // rib_spacing) + 1
+rib_positions = [mount_hole_offset + i * rib_spacing for i in range(rib_count)]
+for y in rib_positions:
+    rib = (
+        cq.Workplane("XY")
+        .center(0, y)
+        .rect(rib_width, rib_height)
+        .extrude(rib_thickness)
+    )
+    base = base.union(rib)
+
+# Chamfer outer vertical edges for safety
+result = base.edges("|Z").chamfer(chamfer_size)
+
+

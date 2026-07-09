@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data (often too large / shouldn't be versioned)
+data/
+*.csv
+*.h5
+*.npz
+
+# Environment / secrets
+.env
+*.key
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+*.save
+
+# Generated benchmark outputs
+*.stl
+*.log
