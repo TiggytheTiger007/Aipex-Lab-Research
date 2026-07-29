@@ -4,15 +4,19 @@ __pycache__/
 .venv/
 venv/
 
-# Data (often too large / shouldn't be versioned)
+# Data (large files)
 data/
-*.csv
 *.h5
 *.npz
+
+# CSV by default, EXCEPT the prompt dataset
+*.csv
+!cad_prompts_function.csv
 
 # Environment / secrets
 .env
 *.key
+config.txt
 
 # OS
 .DS_Store
@@ -24,3 +28,6 @@ data/
 # Generated benchmark outputs
 *.stl
 *.log
+*.zip
+res_*/
+results_*/

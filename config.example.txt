@@ -1,0 +1,13 @@
+# Copy this file to "config.txt" and fill in your values.
+# No "export" commands needed — run_experiment.py reads config.txt automatically.
+# Lines starting with # are ignored.
+
+# The rewriter stage (Gemini, free tier).
+GEMINI_API_KEY=YOUR_KEY_HERE
+
+# The generation model that runs on the lab GPU.
+# A HuggingFace id, or a path to a downloaded checkpoint.
+LOCAL_MODEL_ID=deepseek-ai/deepseek-coder-6.7b-instruct 
+
+# Which GPU to use (run `nvidia-smi` to see what's free).
+GPU_DEVICE=0
